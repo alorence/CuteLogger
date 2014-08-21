@@ -99,6 +99,7 @@ QString AbstractStringAppender::format() const
  *           Qt.
  *   \arg \c %{function} - Similiar to the %{Function}, but the function name is stripped using stripFunctionName
  *   \arg \c %{message} - The log message sent by the caller.
+ *   \arg \c %{category} - The log category.
  *   \arg \c %{appname} - Application name (returned by QCoreApplication::applicationName() function).
  *   \arg \c %{pid} - Application pid (returned by QCoreApplication::applicationPid() function).
  *   \arg \c %{threadid} - ID of current thread.
@@ -137,7 +138,6 @@ QByteArray AbstractStringAppender::qCleanupFuncinfo(const char* name)
   // Strip the function info down to the base function name
   // note that this throws away the template definitions,
   // the parameter types (overloads) and any const/volatile qualifiers.
-
   if (info.isEmpty())
       return info;
 
@@ -150,6 +150,15 @@ QByteArray AbstractStringAppender::qCleanupFuncinfo(const char* name)
           if (info.at(pos) == '[')
               info.truncate(pos);
       }
+  }
+
+  bool hasLambda = false;
+  QRegExp lambdaRegex("::<lambda\\(.*\\)>");
+  int lambdaIndex = lambdaRegex.indexIn(QString::fromLatin1(info));
+  if (lambdaIndex != -1)
+  {
+    hasLambda = true;
+    info.remove(lambdaIndex, lambdaRegex.matchedLength());
   }
 
   // operator names with '(', ')', '<', '>' in it
@@ -200,6 +209,9 @@ QByteArray AbstractStringAppender::qCleanupFuncinfo(const char* name)
           break;
       }
   }
+
+  if (hasLambda)
+    info.append("::lambda");
 
   // find the beginning of the function name
   int parencount = 0;
@@ -291,7 +303,7 @@ QByteArray AbstractStringAppender::qCleanupFuncinfo(const char* name)
  * \sa setFormat(const QString&)
  */
 QString AbstractStringAppender::formattedString(const QDateTime& timeStamp, Logger::LogLevel logLevel, const char* file,
-                                                int line, const char* function, const QString& message) const
+                                                int line, const char* function, const QString& category, const QString& message) const
 {
   QString f = format();
   const int size = f.size();
@@ -400,6 +412,9 @@ QString AbstractStringAppender::formattedString(const QDateTime& timeStamp, Logg
       // Log message
       else if (command == QLatin1String("message"))
         chunk = message;
+
+      else if (command == QLatin1String("category"))
+        chunk = category;
 
       // Application pid
       else if (command == QLatin1String("pid"))
